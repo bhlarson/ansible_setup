@@ -1,0 +1,127 @@
+# Prerequisits
+# On host
+# install ansible https://docs.ansible.com/ansible/latest/installation_guide/intro_installation.html#installing-ansible-on-ubuntu
+# sudo apt install ansible
+#
+# On client
+# Install Ubuntu linux https://ubuntu.com/tutorials/install-ubuntu-desktop#1-overview
+# install ssh server https://ubuntu.com/server/docs/service-openssh
+# sudo apt-get install sshpass
+#
+# ansible-playbook setup.yaml --ask-pass --ask-become-pass
+- hosts: all
+  become: 'yes'
+  vars:
+    users: 
+      - blarson
+    apt_keys:
+      - https://download.docker.com/linux/ubuntu/gpg
+    apt_repositories:
+      - deb https://download.docker.com/linux/ubuntu bionic stable
+    apt_packages:
+      - wget
+      - curl
+      - htop
+      - nfs-common
+      - nfs-kernel-server
+      - git-all
+      - apt-transport-https
+      - ca-certificates
+      - curl
+      - gnupg
+      - lsb-release
+      - docker-ce 
+      - docker-ce-cli 
+      - containerd.io
+      - net-tools
+
+    snap_packages:
+      - chromium
+      - code
+      - microk8s
+    vscode_extensions:
+      - ms-python.python
+      - ms-vscode.cpptools
+      - golang.go
+      - ms-vscode-remote.vscode-remote-extensionpack
+      - ms-azuretools.vscode-docker
+      - eamodio.gitlens
+      - zainchen.json
+      - ms-kubernetes-tools.vscode-kubernetes-tools
+      - redhat.vscode-yaml
+    microk8s_addons:
+      - dns 
+      - storage
+      - registry
+      - gpu
+      - ingress
+      - helm3
+      - metallb
+  tasks:
+    - name: Configure apt_key
+      apt_key:
+        url: "{{item}}"
+      with_items: "{{apt_keys}}"
+
+    - name: Upgrade all apt packages
+      apt: upgrade=dist force_apt_get=yes
+
+    - name: Configure apt_repositories
+      apt_repository:
+        repo: "{{item}}"
+        state: present
+      with_items: "{{apt_repositories}}"
+
+    - name: Install apt packages
+      apt:
+        name: "{{apt_packages}}"
+        state: present
+
+    - name: Create data directory
+      ansible.builtin.file:
+        path: /data
+        owner: nobody
+        group: nogroup
+        mode: '0777'
+        state: directory
+
+
+    - name: Create store directory
+      ansible.builtin.file:
+        path: /store
+        owner: nobody
+        group: nogroup
+        mode: '0777'
+        state: directory
+
+    - name: Install "snap packages"
+      community.general.snap:
+        name: "{{snap_packages}}"
+        classic: yes
+
+    - name: Install vscode extensions
+      become: yes
+      become_user: "{{item[0]}}"
+      shell: code --install-extension "{{item[1]}}"
+      with_nested: 
+        - "{{ users }}"
+        - "{{vscode_extensions}}"
+
+    - name: Configure microk8s users
+      shell: usermod -a -G microk8s "{{item}}"; chown -f -R "{{item}}" ~/.kube
+      with_items: 
+        - "{{ users }}"
+
+    - name: Install microk8s addons
+      shell: microk8s enable "{{item}}"
+      with_items: 
+        - "{{microk8s_addons}}"
+
+    - name: microk8s enable metallb
+      shell: microk8s enable metallb:10.64.140.0/24
+
+
+    - name: All done!
+      debug:
+        msg: Packages have been successfully installed
+        

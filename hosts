@@ -1,0 +1,6 @@
+[ipcs]
+localhost
+
+[ipcs:vars]
+ansible_connection=ssh  
+ansible_user=blarson
