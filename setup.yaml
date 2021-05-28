@@ -16,8 +16,12 @@
       - blarson
     apt_keys:
       - https://download.docker.com/linux/ubuntu/gpg
+      - https://nvidia.github.io/nvidia-docker/gpgkey
     apt_repositories:
       - deb https://download.docker.com/linux/ubuntu bionic stable
+      # - deb https://nvidia.github.io/libnvidia-container/experimental/ubuntu20.04/x86_64 /
+      # - deb https://nvidia.github.io/nvidia-container-runtime/experimental/ubuntu20.04/nvidia-docker.list  /
+      # - deb https://nvidia.github.io/nvidia-docker/ubuntu18.04/x86_64 /
     apt_packages:
       - wget
       - curl
@@ -34,9 +38,11 @@
       - docker-ce-cli 
       - containerd.io
       - net-tools
+      - nvidia-docker2
 
     snap_packages:
       - chromium
+      - go
       - code
       - microk8s
     vscode_extensions:
@@ -57,20 +63,34 @@
       - ingress
       - helm3
       - metallb
+  #roles:
+  #   - role: gantsign.golang
+  #     golang_gopath: '$HOME/workspace-go'
   tasks:
     - name: Configure apt_key
       apt_key:
         url: "{{item}}"
       with_items: "{{apt_keys}}"
 
-    - name: Upgrade all apt packages
-      apt: upgrade=dist force_apt_get=yes
-
     - name: Configure apt_repositories
       apt_repository:
         repo: "{{item}}"
         state: present
       with_items: "{{apt_repositories}}"
+
+    - name: Check Nvidia Docker Repository
+      apt_repository:
+        repo:     "{{ item.repo }}"
+        state:    "{{ item.state }}"
+        filename: nvidia-docker
+      loop:
+      - { repo: "deb https://nvidia.github.io/libnvidia-container/stable/ubuntu18.04/$(ARCH) /",  state: "present" }
+      - { repo: "deb https://nvidia.github.io/nvidia-container-runtime/ubuntu18.04/$(ARCH) /",    state: "present" }
+      - { repo: "deb https://nvidia.github.io/nvidia-docker/ubuntu18.04/$(ARCH) /",               state: "present" }
+
+
+    - name: Upgrade all apt packages
+      apt: upgrade=dist force_apt_get=yes
 
     - name: Install apt packages
       apt:
@@ -107,6 +127,31 @@
         - "{{ users }}"
         - "{{vscode_extensions}}"
 
+    - name: Install vscode extensions
+      become: yes
+      become_user: "{{item[0]}}"
+      shell: code --install-extension "{{item[1]}}"
+      with_nested: 
+        - "{{ users }}"
+        - "{{vscode_extensions}}"
+
+    - name: Ensure group "docker" exists
+      group:
+        name: docker
+        state: present
+
+    - name: adding user '{{ item }}' to docker group
+      user:
+        name: '{{ item }}'
+        groups: docker
+        append: yes
+      with_items: 
+        - "{{ users }}"
+
+    - name: Restart docker to load nvidia extension
+      shell: systemctl restart docker
+
+
     - name: Configure microk8s users
       shell: usermod -a -G microk8s "{{item}}"; chown -f -R "{{item}}" ~/.kube
       with_items: 
@@ -119,7 +164,6 @@
 
     - name: microk8s enable metallb
       shell: microk8s enable metallb:10.64.140.0/24
-
 
     - name: All done!
       debug:

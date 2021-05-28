@@ -1,9 +1,15 @@
 
-ansible-galaxy collection install oasis_roles.system
+# ansible-galaxy install gantsign.golang
 
 ansible-playbook setup.yaml --ask-pass --ask-become-pass
 
-echo Re-enter credentials after install: su - $USER
+#echo Re-enter credentials after install: su - $USER
 #cwd=$(pwd)
 #su - $USER
 #cd $cwd
+
+echo Test docker install
+docker run hello-world
+
+echo Test nvidia docker extension
+sudo docker run --rm --gpus all nvidia/cuda:11.0-base nvidia-smi
